@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>HtStreamer</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<style>
+	body {
+		display: grid;
+		place-items: center;
+		height: 100vh;
+		background: #fff;
+		margin: 0;
+		font-family: Arial, sans-serif;
+	}
+
+	#canvas {
+		background: #00f;
+	}
+
+	#panel {
+		position: absolute;
+		font-size: 10pt;
+		left: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.85);
+		padding: 2px;
+		color: #fff;
+	}
+
+	#panel button {
+		font-size: inherit;
+		border: 1px solid #fff;
+		background: none;
+		color: inherit;
+	}
+
+	#panel button:hover {
+		background: rgba(255, 255, 255, 0.2);
+	}
+
+	#panel button:active {
+		background: rgba(255, 255, 255, 0.5);
+	}
+
+	#panel button:disabled {
+		border-color: #aaa;
+		color: #aaa;
+		background: rgba(0, 0, 0, 0.85);
+	}
+
+	#cursor {
+		position: absolute;
+		background: #fff;
+		border: 1px solid #000;
+		width: 8px;
+		height: 8px;
+	}
+</style>
+
+<body>
+	<canvas id="canvas"></canvas>
+	<div id="panel"><button id="lockButton" onclick="lock();">Lock</button> <button
+			onclick="fullscreen()">Fullscreen</button> Quality: <span id="qualityButtons"></span><span id="stat"></span></div>
+	<div id="cursor"></div>
+</body>
+<script>
+	let canvas = document.getElementById("canvas");
+	canvas.width = 800;
+	canvas.height = 600;
+	canvas.style.aspectRatio = canvas.width + "/" + canvas.height;
+
+	const ver = "1";
+	const dataSep = String.fromCharCode(0);
+	let cPos = [0, 0];
+
+	let lockButton = document.getElementById("lockButton");
+	let cursor = document.getElementById("cursor");
+	let stat = document.getElementById("stat");
+	let qualityButtons = document.getElementById("qualityButtons");
+	let reqQualResponded = false;
+
+	function setupUI() {
+		["potato", "low", "med", "high", "lossless"].forEach((q) => {
+			let button = document.createElement("button");
+			button.onclick = (e) => {
+				if (reqQualResponded) {
+					sendSetQuality(q.toLowerCase());
+				}
+			};
+			q = q.substring(0, 1).toUpperCase() + q.substring(1, q.length);
+			button.innerText = q;
+			qualityButtons.appendChild(button);
+			qualityButtons.appendChild(document.createTextNode(" "));
+		});
+		
+	}
+	setupUI();
+
+	function updateCPos() {
+		cursor.style.left = canvas.getBoundingClientRect().x + cPos[0] + "px";
+		cursor.style.top = canvas.getBoundingClientRect().y + cPos[1] + "px";
+	}
+
+	window.onresize = (e) => {
+		canvas.style.width = "100%";
+		canvas.style.height = "";
+
+		if (window.innerHeight < canvas.getBoundingClientRect().height) {
+			canvas.style.height = "100vh";
+			canvas.style.width = "";
+		}
+
+		updateCPos();
+	};
+
+	window.onresize(null);
+
+	const ctx = canvas.getContext("2d");
+
+	function statusText(msg) {
+		ctx.font = "20pt Arial, sans-serif";
+		ctx.fillStyle = "#000";
+		let measured = ctx.measureText(msg);
+		let x = (canvas.width / 2) - (measured.width / 2);
+		let y = (canvas.height / 2) - 10;
+		ctx.fillRect(0, y, canvas.width, 20);
+
+		ctx.fillStyle = "#fff";
+		ctx.fillText(msg, x, y + 20);
+	}
+	console.log("data ver " + ver);
+
+	let socket;
+	function setupSocket() {
+		statusText("Connecting...");
+		socket = new WebSocket("ws://" + window.location.hostname + ":8080")
+
+		socket.addEventListener("message", (e) => {
+			let data = e.data;
+
+			if (typeof data == "string") {
+				let spl = data.split(dataSep);
+
+				if (spl[0] == "stat") {
+					if (spl.length > 2) {
+						stat.innerText = spl[1] + " " + spl[2] + "/" + Math.floor(1000 / spl[4]) + " " + (spl[3] / 1000);
+					}
+				} else if (spl[0] == "reqQual") {
+					if (spl.length == 2) {
+						qualityButtons.childNodes.forEach((b) => {
+							if (b.tagName == "BUTTON") {
+								if (b.innerText.toLowerCase() == spl[1]) {
+									b.setAttribute("disabled", true);
+								} else {
+									b.removeAttribute("disabled");
+								}
+							}
+						});
+						reqQualResponded = true;
+					}
+				}
+			} else {
+				let img = new Image();
+				img.onload = () => {
+					if (canvas.width != img.width) {
+						canvas.width = img.width;
+						canvas.style.aspectRatio = canvas.width + "/" + canvas.height;
+						window.onresize(null);
+					}
+					if (canvas.height != img.height) {
+						canvas.height = img.height;
+						canvas.style.aspectRatio = canvas.width + "/" + canvas.height;
+						window.onresize(null);
+					}
+					ctx.drawImage(img, 0, 0);
+				};
+				img.src = URL.createObjectURL(data);
+			}
+		});
+
+		socket.addEventListener("error", (e) => {
+			setupSocket();
+		});
+
+		socket.addEventListener("open", (e) => {
+			socket.send("clientReady" + dataSep + ver);
+			socket.send("statReady");
+			socket.send("reqQual");
+		});
+	}
+	setupSocket();
+
+	/*setInterval(() => {
+		if (socket.readyState == socket.OPEN) {
+			socket.send("screen" + dataSep);
+		} else {
+			statusText("Connecting...");
+		}
+	}, pollRate);
+
+	setInterval(() => {
+		if (socket.readyState == socket.OPEN) {
+			socket.send(ver + dataSep + "stat" + dataSep);
+		}
+	}, statPollRate);
+	*/
+
+	/*canvas.onmousedown = (e) => {
+		if (document.pointerLockElement == canvas) {
+			let x = canvas.width * (cPos[0] / canvas.getBoundingClientRect().width);
+			let y = canvas.height * (cPos[1] / canvas.getBoundingClientRect().height);
+
+			
+		}
+	};
+
+	canvas.onmouseup = (e) => {
+		if (document.pointerLockElement == canvas) {
+			fetch("/put/mu");
+		}
+	};*/
+
+	canvas.onmousemove = (e) => {
+		if (document.pointerLockElement == canvas) {
+			cPos[0] += e.movementX;
+			if (cPos[0] < 0) {
+				cPos[0] = 0;
+			} else if (cPos[0] >= canvas.clientWidth) {
+				cPos[0] = canvas.clientWidth - 1;
+			}
+
+			cPos[1] += e.movementY;
+			if (cPos[1] < 0) {
+				cPos[1] = 0;
+			} else if (cPos[1] >= canvas.clientHeight) {
+				cPos[1] = canvas.clientHeight - 1;
+			}
+
+			updateCPos();
+		}
+	}
+
+	function lock() {
+		canvas.requestPointerLock();
+	}
+
+	document.onpointerlockchange = () => {
+		if (document.pointerLockElement != canvas) {
+			lockButton.innerText = "Lock";
+		} else {
+			lockButton.innerText = "Lock (esc to unlock)";
+		}
+	};
+
+	function fullscreen() {
+		canvas.requestPointerLock();
+		document.documentElement.requestFullscreen();
+	}
+
+	function sendSetQuality(quality) {
+		if (socket.readyState == socket.OPEN) {
+			socket.send("qual" + dataSep + quality);
+			qualityButtons.childNodes.forEach((b) => {
+				if (b.tagName == "BUTTON") {
+					if (b.innerText.toLowerCase() == quality) {
+						b.setAttribute("disabled", true);
+					} else {
+						b.removeAttribute("disabled");
+					}
+				}
+			});
+		}
+	}
+
+</script>
+
+</html>
