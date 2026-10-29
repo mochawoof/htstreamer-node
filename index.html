@@ -192,21 +192,6 @@
 	}
 	setupSocket();
 
-	/*setInterval(() => {
-		if (socket.readyState == socket.OPEN) {
-			socket.send("screen" + dataSep);
-		} else {
-			statusText("Connecting...");
-		}
-	}, pollRate);
-
-	setInterval(() => {
-		if (socket.readyState == socket.OPEN) {
-			socket.send(ver + dataSep + "stat" + dataSep);
-		}
-	}, statPollRate);
-	*/
-
 	/*canvas.onmousedown = (e) => {
 		if (document.pointerLockElement == canvas) {
 			let x = canvas.width * (cPos[0] / canvas.getBoundingClientRect().width);
