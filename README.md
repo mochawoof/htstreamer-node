@@ -10,6 +10,3 @@ Observed via in-app stats over a period of time, desktop under minimal load whil
 | Med | 58-80 | 26-29 | 71-81 |
 | High | 59-80 | 25-29 | 187-203 |
 | Lossless | 61-100 | 22-29 | 717-893 |
-
-## Small Codebase
-As of the time of this being written (at the first commit), the server code sits at 111 lines while the client code has 264.
